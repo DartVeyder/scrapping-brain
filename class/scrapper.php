@@ -1,68 +1,120 @@
 <?php
 
 use GuzzleHttp\Client;
+use Shuchkin\SimpleXLSX;
+use GuzzleHttp\Exception\ClientException;
 use Symfony\Component\DomCrawler\Crawler;
-use SimpleExcel\SimpleExcel;
 
 class Scrapper
-{
-    private $client;
-    public $file_products;
-    public function __construct()
-    { 
-        // Створюємо екземпляр Guzzle HTTP-клієнта
-        $this->client = new Client();
-    }
+{ 
+    public $file_products; 
 
     public function init()
     {
         $data = [];
         $products = $this->upload_file_products();
-        foreach ($products as $product) {
+        unset($products[0][7]); 
+        $header = array_shift($products);
+        $data_export_xlsx = [];
+        foreach ($products as $key => $product) {
+            unset($product[7]); 
+            $url = str_replace("opt." , "" , $product[19]);
+            $article = $product[1];
+            $contents = $this->get_contents( $url);
+            $content_data = $contents['data'];
+            $status_code = $contents['status_code'];
+
             $data[] = [
-                'name' => $product['name'],
-                'code' => $product['code'],
-                'article' => $product['article'],
-                'data' => $this->get_contents($product['url'])
+                'name' => $product[2],
+                'code' => $product[0],
+                'article' =>  $article,
+                'url' => $url,
+                'status_code' => $status_code,
+                'data' =>  $content_data
             ];
-        }
-        echo "<pre>";
-        print_r($data);
+            echo "$key $status_code $article  </br>";
+            $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
+            $this->save_json($data);
+        } 
+        
+        $this->save_xlsx($data_export_xlsx, $header); 
     }
+
+    private function save_json($data){
+        $jsonString = json_encode($data,JSON_UNESCAPED_UNICODE);
+        $file = fopen('files/file.json', 'w');
+        fwrite($file, $jsonString);
+        fclose($file);
+    }
+
+    private function save_xlsx($data, $header){
+        $header = array_merge($header, ['Images', 'Description']);
+        array_unshift($data, $header);
+        $xlsx = Shuchkin\SimpleXLSXGen::fromArray( $data );
+        $xlsx->saveAs('files/export_products.xlsx');
+    }
+    private function get_formate_xslx($data){
+        $pictures = implode(", ", $data['pictures']);
+        return [$pictures,  $data['description']];
+    }
+
+    private function save_csv($data){
+
+    }
+
+   
 
     private function upload_file_products()
     {
-        $data = [
-            [
-            "article" => 'SC620I',
-            "code" => '4444',
-            "name" => 'Пристрій безперебійного живлення Smart-UPS SC 620VA APC (SC620I)',
-            "url" => "https://brain.com.ua/ukr/Pristriy_bezperebiynogo_jhivlennya_APC_Smart-UPS_SC_620VA_SC620I-p23160.html"
-        ]
-    ];
+        if ( $xlsx = SimpleXLSX::parse($this->file_products) ) {
+            $data = $xlsx->rows(); 
+        } else {
+            $data = SimpleXLSX::parseError();
+        } 
         return $data;
     }
 
     private function get_contents($url)
     {
+        $result = [];
+        $client = new Client();
         // Виконуємо GET-запит до сторінки
-        $response = $this->client->request('GET', $url);
-        // Отримуємо HTML-код сторінки з відповіді
-        $html = $response->getBody()->getContents();
-        $dom = new Crawler($html);
-        // Вибираємо всі елементи <img> на сторінці та отримуємо значення атрибуту "src"
-        $pictures = $this->get_pictures($dom);
-        $description = $this->get_description($dom);
-        $attributes = $this->get_attributes($dom);
+        
+        try {
+            // Make an HTTP GET request
+            $response = $client->request('GET', $url);
+        
+            // Get the status code from the response
+            $statusCode = $response->getStatusCode(); 
+            if ($statusCode == 200) {
+                 // Отримуємо HTML-код сторінки з відповіді
+                $html = $response->getBody()->getContents();
+            
+                $dom = new Crawler($html);
+                // Вибираємо всі елементи <img> на сторінці та отримуємо значення атрибуту "src"
+                $pictures = $this->get_pictures($dom);
+                $description = $this->get_description($dom);
+                $attributes = $this->get_attributes($dom);
+                
+                $result['data'] = [ 
+                    'pictures' =>$pictures,
+                    'description' => $description,
+                    'attributes' => $attributes
+                ];
+            } 
+        } catch (ClientException $e) {
+            // Handle client-side errors (e.g., 404)
+            $statusCode = $e->getResponse()->getStatusCode();
+        } catch (\Exception $e) {
+            // Handle other exceptions
+            echo "An error occurred: " . $e->getMessage();
+        } 
 
-        return [
-            'pictures' =>$pictures,
-            'description' => $description,
-            'attributes' => $attributes
-        ];
+        $result['status_code'] =  $statusCode;
+ 
+        return $result;
     }
-
-    
+ 
 
     private function get_pictures($dom)
     {
@@ -90,7 +142,7 @@ class Scrapper
             // Додаємо назву та значення до асоціативного масиву
             $data[] = $name;
         }  
-        
+
         for ($i=0; $i < count($data) ; $i++) { 
             if ($i % 2 != 0) {
                 continue;
