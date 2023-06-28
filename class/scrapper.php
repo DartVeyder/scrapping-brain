@@ -10,6 +10,7 @@ class Scrapper
 { 
     public $file_products; 
     public $file_template_export; 
+    private $url_site =" https://brain.com.ua";
     public function init()
     {
         $data = [];
@@ -24,11 +25,15 @@ class Scrapper
             unset($product[7]);   
             $product = array_combine($header, $product);
              
-            $url = str_replace("opt." , "" , $product['URL']);
             $article = $product['Article'];
+            
+            $url = $this->search_product($product['Code'], $product['Article']);
+            if($url == ''){
+                $url = str_replace("opt." , "" , $product['URL']);
+            }
             $contents = $this->get_contents( $url);
             $content_data = $contents['data'];
-            $status_code = $contents['status_code'];
+            $status_code = $contents['status_code']; 
 
             $item = [
                 'name' => $product['Name'],
@@ -40,21 +45,22 @@ class Scrapper
             ];
             $data[] = $item;
             $date = date("Y-m-d H:i:s");
-            $text =  "$key. $date $status_code $article";
+            $text =  "$key. $date $status_code $article $url";
             echo $text .' <br>';
             $this->logs($text);
             $data_export_xlsx[] = $this->get_formate_xslx($template_export, array_merge($product, $content_data));
           //  $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
-            
+          $this->save_csv($data_export_xlsx, $template_export); 
+          $this->save_xlsx($data_export_xlsx, $template_export); 
+          $this->save_json($data);
+           
         } 
-        $this->save_csv($data_export_xlsx, $template_export); 
-        $this->save_xlsx($data_export_xlsx, $template_export); 
-        $this->save_json($data);
- 
+        
     }
 
     private function save_json($data){
-        $date = time();
+        //$date = time();
+        $date = '';
         $jsonString = json_encode($data,JSON_UNESCAPED_UNICODE);
         $file = fopen('files/export_products_'. $date.'.json', 'w');
         fwrite($file, $jsonString);
@@ -62,18 +68,19 @@ class Scrapper
     }
 
     private function save_xlsx($data, $header){
-        $date = time(); 
+        //$date = time();
+        $date = '';
         array_unshift($data, $header);
        
         $xlsx = Shuchkin\SimpleXLSXGen::fromArray( $data );
         $xlsx->saveAs('files/export_products_'. $date.'.xlsx');
     }
     private function save_csv($data, $header){
-        $date = time(); 
+       //$date = time();
+       $date = '';
         array_unshift($data, $header);
        
-        $csv = SimpleCSV::export( $data );
-        $date = time(); 
+        $csv = SimpleCSV::export( $data ); 
         $file = fopen('files/export_products_'. $date.'.csv', 'w');
         fwrite($file, $csv);
         fclose($file);
@@ -166,6 +173,44 @@ class Scrapper
         return $data;
     }
 
+    private function search_product($code, $article){
+        $url = "https://brain.com.ua/ukr/search/?Search=$code";
+        $client = new Client();
+        try {
+            // Make an HTTP GET request
+            $response = $client->request('GET', $url);
+        
+            // Get the status code from the response
+            $statusCode = $response->getStatusCode(); 
+            if ($statusCode == 200) {
+                 // Отримуємо HTML-код сторінки з відповіді
+                $html = $response->getBody()->getContents();
+                $dom = new Crawler($html);
+                return $this->get_product_url($dom, $article);
+               
+            } 
+        } catch (ClientException $e) {
+            // Handle client-side errors (e.g., 404)
+            $statusCode = $e->getResponse()->getStatusCode();
+        } catch (\Exception $e) {
+            // Handle other exceptions
+            echo "An error occurred: " . $e->getMessage();
+        } 
+    }
+
+    private function get_product_url($dom,$article){
+        $product = $dom->filter('.description-wrapper a')->eq(0) ; 
+        $url = "https://brain.com.ua".$product->attr('href');
+        $name = $product->text();
+        if (stripos($name, $article) !== false) {
+            return $url;
+        }else{
+            return false;
+        }
+         
+       
+    }
+
     private function get_contents($url)
     {
         $result = [];
@@ -199,6 +244,12 @@ class Scrapper
         } catch (ClientException $e) {
             // Handle client-side errors (e.g., 404)
             $statusCode = $e->getResponse()->getStatusCode();
+            $result['data'] = [ 
+                'pictures' => [''],
+                'description' => '',
+                'attributes' => '',
+                'categories' => ''
+            ];
         } catch (\Exception $e) {
             // Handle other exceptions
             echo "An error occurred: " . $e->getMessage();
