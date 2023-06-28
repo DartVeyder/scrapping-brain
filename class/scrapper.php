@@ -8,61 +8,99 @@ use Symfony\Component\DomCrawler\Crawler;
 class Scrapper
 { 
     public $file_products; 
-
+    public $file_template_export; 
     public function init()
     {
         $data = [];
-        $products = $this->upload_file_products();
-        unset($products[0][7]); 
-        $header = array_shift($products);
         $data_export_xlsx = [];
+        $products = $this->upload_file_products();
+        $template_export = $this->file_template_export()[0];
+ 
+        $header = array_shift($products);
+        unset($header[7]);
+        
         foreach ($products as $key => $product) {
-            unset($product[7]); 
-            $url = str_replace("opt." , "" , $product[19]);
-            $article = $product[1];
+            unset($product[7]);   
+            $product = array_combine($header, $product);
+             
+            $url = str_replace("opt." , "" , $product['URL']);
+            $article = $product['Article'];
             $contents = $this->get_contents( $url);
             $content_data = $contents['data'];
             $status_code = $contents['status_code'];
 
-            $data[] = [
-                'name' => $product[2],
-                'code' => $product[0],
+            $item = [
+                'name' => $product['Name'],
+                'code' => $product['Code'],
                 'article' =>  $article,
                 'url' => $url,
                 'status_code' => $status_code,
                 'data' =>  $content_data
             ];
+            $data[] = $item;
             echo "$key $status_code $article  </br>";
-            $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
-            $this->save_json($data);
+            $data_export_xlsx[] = $this->get_formate_xslx($template_export, $item);
+          //  $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
+            
         } 
-        
-        $this->save_xlsx($data_export_xlsx, $header); 
+       
+        $this->save_xlsx($data_export_xlsx, $template_export); 
+        $this->save_json($data);
+ 
     }
 
     private function save_json($data){
+        $date = time();
         $jsonString = json_encode($data,JSON_UNESCAPED_UNICODE);
-        $file = fopen('files/file.json', 'w');
+        $file = fopen('files/file'. $date.'.json', 'w');
         fwrite($file, $jsonString);
         fclose($file);
     }
 
     private function save_xlsx($data, $header){
-        $header = array_merge($header, ['Images', 'Description']);
+        $date = time(); 
         array_unshift($data, $header);
+       
         $xlsx = Shuchkin\SimpleXLSXGen::fromArray( $data );
-        $xlsx->saveAs('files/export_products.xlsx');
+        $xlsx->saveAs('files/export_products_'. $date.'.xlsx');
     }
-    private function get_formate_xslx($data){
+    /*private function get_formate_xslx($data){
         $pictures = implode(", ", $data['pictures']);
         return [$pictures,  $data['description']];
+    }*/
+    private function get_formate_xslx($template_export, $data){
+        $array = [];
+        foreach ($template_export as $key => $col) {
+            switch ($key) {
+                case 0:
+                    $array[] = $data['article'];
+                    break; 
+                case 1:
+                    $array[] = $data['name'];
+                break; 
+                case 6:
+                    $array[] = $data['data']['description'];
+                break; 
+                default:
+                    $array[]  = '';
+                    break;
+            }
+        }
+        return $array;
     }
-
     private function save_csv($data){
 
     }
 
-   
+    private function file_template_export()
+    {
+        if ( $xlsx = SimpleXLSX::parse($this->file_template_export) ) {
+            $data = $xlsx->rows(); 
+        } else {
+            $data = SimpleXLSX::parseError();
+        } 
+        return $data;
+    }
 
     private function upload_file_products()
     {
