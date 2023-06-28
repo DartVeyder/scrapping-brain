@@ -4,6 +4,7 @@
         "guzzlehttp/guzzle": "^7.7",
         "fabpot/goutte": "^4.0",
         "symfony/dom-crawler": "^5.4",
-        "shuchkin/simplexlsx": "^1.0"
+        "shuchkin/simplexlsx": "^1.0",
+        "shuchkin/simplecsv": "^0.1.1"
     }
 }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4c1f300e77faedc9309f2a0cba0d9a1f",
+    "content-hash": "13a52ae6f65ec27d6ab86221ac788824",
     "packages": [
         {
             "name": "fabpot/goutte",
@@ -689,6 +689,56 @@
                 "source": "https://github.com/ralouphie/getallheaders/tree/develop"
             },
             "time": "2019-03-08T08:55:37+00:00"
+        },
+        {
+            "name": "shuchkin/simplecsv",
+            "version": "0.1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/shuchkin/simplecsv.git",
+                "reference": "f5c9d15e7dbe4956c1140f5e3b7befef840f943d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/shuchkin/simplecsv/zipball/f5c9d15e7dbe4956c1140f5e3b7befef840f943d",
+                "reference": "f5c9d15e7dbe4956c1140f5e3b7befef840f943d",
+                "shasum": ""
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "src/SimpleCSV.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Sergey Shuchkin (SMSPILOT)",
+                    "email": "sergey.shuchkin@gmail.com",
+                    "homepage": "https://shuchkin.ru/"
+                }
+            ],
+            "description": "Parse and retrieve data from CSV files. Export data to CSV.",
+            "homepage": "https://github.com/shuchkin/simplecsv",
+            "keywords": [
+                "backend",
+                "csv",
+                "excel",
+                "export",
+                "import",
+                "parser",
+                "php",
+                "read",
+                "write"
+            ],
+            "support": {
+                "issues": "https://github.com/shuchkin/simplecsv/issues",
+                "source": "https://github.com/shuchkin/simplecsv/tree/0.1.1"
+            },
+            "time": "2021-04-28T10:01:55+00:00"
         },
         {
             "name": "shuchkin/simplexlsx",

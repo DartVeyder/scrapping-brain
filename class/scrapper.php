@@ -1,5 +1,6 @@
 <?php
 
+use SimpleCSV;
 use GuzzleHttp\Client;
 use Shuchkin\SimpleXLSX;
 use GuzzleHttp\Exception\ClientException;
@@ -38,12 +39,15 @@ class Scrapper
                 'data' =>  $content_data
             ];
             $data[] = $item;
-            echo "$key $status_code $article  </br>";
-            $data_export_xlsx[] = $this->get_formate_xslx($template_export, $item);
+            $date = date("Y-m-d H:i:s");
+            $text =  "$key. $date $status_code $article";
+            echo $text .' <br>';
+            $this->logs($text);
+            $data_export_xlsx[] = $this->get_formate_xslx($template_export, array_merge($product, $content_data));
           //  $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
             
         } 
-       
+        $this->save_csv($data_export_xlsx, $template_export); 
         $this->save_xlsx($data_export_xlsx, $template_export); 
         $this->save_json($data);
  
@@ -52,7 +56,7 @@ class Scrapper
     private function save_json($data){
         $date = time();
         $jsonString = json_encode($data,JSON_UNESCAPED_UNICODE);
-        $file = fopen('files/file'. $date.'.json', 'w');
+        $file = fopen('files/export_products_'. $date.'.json', 'w');
         fwrite($file, $jsonString);
         fclose($file);
     }
@@ -64,23 +68,68 @@ class Scrapper
         $xlsx = Shuchkin\SimpleXLSXGen::fromArray( $data );
         $xlsx->saveAs('files/export_products_'. $date.'.xlsx');
     }
-    /*private function get_formate_xslx($data){
-        $pictures = implode(", ", $data['pictures']);
-        return [$pictures,  $data['description']];
-    }*/
+    private function save_csv($data, $header){
+        $date = time(); 
+        array_unshift($data, $header);
+       
+        $csv = SimpleCSV::export( $data );
+        $date = time(); 
+        $file = fopen('files/export_products_'. $date.'.csv', 'w');
+        fwrite($file, $csv);
+        fclose($file);
+    }
     private function get_formate_xslx($template_export, $data){
-        $array = [];
+        $array = []; 
         foreach ($template_export as $key => $col) {
             switch ($key) {
                 case 0:
-                    $array[] = $data['article'];
+                    $array[] = $data['Article'];
                     break; 
                 case 1:
-                    $array[] = $data['name'];
+                    $array[] = $data['Name'];
                 break; 
                 case 6:
-                    $array[] = $data['data']['description'];
+                    $array[] = $data['description'];
                 break; 
+                case 2:
+                    $array[] = 1;
+                break; 
+                case 3:
+                    $array[] = 0;
+                break;
+                case 4:
+                    $array[] = 'visible';
+                break;
+                case 5:
+                    $array[] = $data['description'];
+                break;
+                case 9:
+                    $array[] = 'taxable';
+                break;
+                case 11:
+                    $array[] = 1;
+                break;
+                case 14:
+                    $array[] = 0;
+                break;
+                case 15:
+                    $array[] = 0;
+                break;
+                case 20:
+                    $array[] = 1;
+                break;
+                case 23:
+                    $array[] = $data['RetailPrice'];
+                break;
+                case 24:
+                    $array[] = implode(">", $data['categories']);
+                break;
+                case 27:
+                    $array[] =  implode(", ", $data['pictures']);
+                break;
+                case 36:
+                    $array[] =  0;
+                break;
                 default:
                     $array[]  = '';
                     break;
@@ -88,8 +137,13 @@ class Scrapper
         }
         return $array;
     }
-    private function save_csv($data){
+    
 
+    private function logs($text){
+        $path = 'logs/log.txt'; 
+        $file = fopen( $path, 'a+');
+        fwrite($file, $text . "\n");
+        fclose($file);
     }
 
     private function file_template_export()
@@ -130,6 +184,7 @@ class Scrapper
             
                 $dom = new Crawler($html);
                 // Вибираємо всі елементи <img> на сторінці та отримуємо значення атрибуту "src"
+                $categories = $this->get_categories($dom);
                 $pictures = $this->get_pictures($dom);
                 $description = $this->get_description($dom);
                 $attributes = $this->get_attributes($dom);
@@ -137,7 +192,8 @@ class Scrapper
                 $result['data'] = [ 
                     'pictures' =>$pictures,
                     'description' => $description,
-                    'attributes' => $attributes
+                    'attributes' => $attributes,
+                    'categories' => $categories
                 ];
             } 
         } catch (ClientException $e) {
@@ -153,6 +209,23 @@ class Scrapper
         return $result;
     }
  
+    private function get_categories($dom)
+    {
+        $data = [];
+        $ul = $dom->filter('.br-breadcrumbs-list') ;
+        $lis = $ul->filterXPath('//li/a');
+       
+        foreach ($lis as $key => $li) {
+            if($key <  2 ){
+                continue;
+            } 
+            
+            $data[] = trim($li->textContent);
+             
+        } 
+
+        return $data;
+    }
 
     private function get_pictures($dom)
     {
