@@ -10,6 +10,7 @@ class Scrapper
 { 
     public $file_products; 
     public $file_template_export; 
+    public $num_products;
     private $url_site =" https://brain.com.ua";
     public function init()
     {
@@ -17,11 +18,12 @@ class Scrapper
         $data_export_xlsx = [];
         $products = $this->upload_file_products();
         $template_export = $this->file_template_export()[0];
- 
+        $num_attribute = 0;
         $header = array_shift($products);
         unset($header[7]);
         
         foreach ($products as $key => $product) {
+           
             unset($product[7]);   
             $product = array_combine($header, $product);
              
@@ -33,6 +35,10 @@ class Scrapper
             }
             $contents = $this->get_contents( $url);
             $content_data = $contents['data'];
+            if(count($content_data['attributes']) >  $num_attribute ){
+                $num_attribute = count($content_data['attributes']);
+            }
+            
             $status_code = $contents['status_code']; 
 
             $item = [
@@ -45,17 +51,22 @@ class Scrapper
             ];
             $data[] = $item;
             $date = date("Y-m-d H:i:s");
-            $text =  "$key. $date $status_code $article $url";
+            $text =  "$key. $date $status_code $article $url $num_attribute " . count($content_data['attributes']);
             echo $text .' <br>';
             $this->logs($text);
-            $data_export_xlsx[] = $this->get_formate_xslx($template_export, array_merge($product, $content_data));
+            $data_xlsx = $this->get_formate_xslx($template_export, array_merge($product, $content_data), $num_attribute);
+            $data_export_xlsx[] =  $data_xlsx['data'];
+            $header_export_xlsx = $data_xlsx['header'];
+            
           //  $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
-          $this->save_csv($data_export_xlsx, $template_export); 
-          $this->save_xlsx($data_export_xlsx, $template_export); 
+          $this->save_csv($data_export_xlsx, $header_export_xlsx); 
+          $this->save_xlsx($data_export_xlsx, $header_export_xlsx); 
           $this->save_json($data);
-           
-        } 
-        
+          if($key+1 >= $this->num_products ){
+            break;
+        }
+        }  
+    
     }
 
     private function save_json($data){
@@ -85,7 +96,7 @@ class Scrapper
         fwrite($file, $csv);
         fclose($file);
     }
-    private function get_formate_xslx($template_export, $data){
+    private function get_formate_xslx($template_export, $data, $num_attribute){
         $array = []; 
         foreach ($template_export as $key => $col) {
             switch ($key) {
@@ -96,7 +107,7 @@ class Scrapper
                     $array[] = $data['Name'];
                 break; 
                 case 6:
-                    $array[] = $data['description'];
+                    $array[] = $data['description'] . $this->get_description_formate_xlsx($data['attributes'],  $data['description']);
                 break; 
                 case 2:
                     $array[] = 1;
@@ -106,9 +117,6 @@ class Scrapper
                 break;
                 case 4:
                     $array[] = 'visible';
-                break;
-                case 5:
-                    $array[] = $data['description'];
                 break;
                 case 9:
                     $array[] = 'taxable';
@@ -142,7 +150,62 @@ class Scrapper
                     break;
             }
         }
-        return $array;
+       
+
+        if($data['attributes']){
+           // $attributes = $this->get_attribute_formate_xlsx($data['attributes'],$num_attribute);
+            //$array = array_merge($array, $attributes['data']);
+           // $header = array_merge($template_export, $attributes['header']);
+           
+           $header = $template_export;
+        }else{
+            $header = $template_export;
+        }
+       
+         
+        return ['data'=>$array, 'header'=>$header];
+    }
+
+    private function get_description_formate_xlsx($attributes, $description){
+        $tr = '';
+        foreach ($attributes as $key => $attribute) {
+         //   $attribute["value"] = str_replace(",", "" , $attribute["value"]);
+           // $attribute["name"] = str_replace(",", " " , $attribute["name"]);
+             $tr .= "$attribute[name]: $attribute[value] </br>";
+        }
+
+        $html = "</br><h2>Характеристики</h2>$tr";
+echo $html;
+        return $html;
+    }
+    private function get_attribute_formate_xlsx($attributes,$num_attribute){
+        $data = [];
+        $header = []; 
+        $j = 1;
+        for ($i= 0; $i < $num_attribute; $i++) { 
+            
+            if(iconv_strlen($attributes[$i]['value']) <= 28){
+            if($attributes[$i]['name']){
+                $data[] = $attributes[$i]['name'];
+                $data[] = $attributes[$i]['value'] ;
+                $data[] = 1;
+                $data[] = 1;
+            }else{
+                $data[] = '';
+                $data[] = '';
+                $data[] = '';
+                $data[] = '';
+            }
+
+            $header[] = "Attribute $j Name";
+            $header[] = "Attribute $j Value(s)";
+            $header[] = "Attribute $j Visible";
+            $header[] = "Attribute $j Global";
+            $j++;
+        }
+    }
+         return['data'=>$data, 'header'=>$header];
+
     }
     
 
@@ -319,4 +382,20 @@ class Scrapper
         } 
         return $attributes;
     }
+}
+
+function dd($data, $status = 0){
+    echo "<pre>";
+    print_r($data);
+    switch ($status) {
+        case 0:
+             exit;
+        break;
+        case 1:
+            continue;
+        break; 
+        default:
+            # code...
+            break;
+    } 
 }
