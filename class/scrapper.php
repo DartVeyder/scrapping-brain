@@ -11,6 +11,7 @@ class Scrapper
     public $file_products; 
     public $file_template_export; 
     public $num_products;
+    private $date;
     private $url_site =" https://brain.com.ua";
     public function init()
     {
@@ -21,7 +22,8 @@ class Scrapper
         $num_attribute = 0;
         $header = array_shift($products);
         unset($header[7]);
-        
+        $this->date = time();
+
         foreach ($products as $key => $product) {
            
             unset($product[7]);   
@@ -34,6 +36,7 @@ class Scrapper
                 $url = str_replace("opt." , "" , $product['URL']);
             }
             $contents = $this->get_contents( $url);
+
             $content_data = $contents['data'];
             if(count($content_data['attributes']) >  $num_attribute ){
                 $num_attribute = count($content_data['attributes']);
@@ -50,7 +53,7 @@ class Scrapper
                 'data' =>  $content_data
             ];
             $data[] = $item;
-            $date = date("Y-m-d H:i:s");
+            $date = date('Y-m-d H:i:s');
             $text =  "$key. $date $status_code $article $url $num_attribute " . count($content_data['attributes']);
             echo $text .' <br>';
             $this->logs($text);
@@ -59,40 +62,74 @@ class Scrapper
             $header_export_xlsx = $data_xlsx['header'];
             
           //  $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
+          if( $status_code == 200){
           $this->save_csv($data_export_xlsx, $header_export_xlsx); 
           $this->save_xlsx($data_export_xlsx, $header_export_xlsx); 
           $this->save_json($data);
           if($key+1 >= $this->num_products ){
-            break;
+                break;
+            }
         }
-        }  
+            }  
     
     }
 
+    public function upload_price_xlsx($file){ 
+        //$this->date = time();
+        if ( $xlsx = SimpleXLSX::parse($file) ) {
+            $data = $xlsx->rows(); 
+            $array = [];
+            $header = array_shift($data);
+            foreach ($data as $key => $item) {
+                if($item[27] != ''){
+                    $item[24] = str_replace(',',';', $item[24] );
+                   // $item[27] = '';
+                    $array[] = $item;
+                   // dd($item,2);
+                }
+            }
+
+            $products = array_chunk($array,100);
+
+           // dd($products);
+            foreach ($products as $key => $product) {
+                $this->save_xlsx($product, $header, "files/export/xlsx/products_$key.xlsx");
+                $this->save_csv($product, $header, "files/export/csv/products_$key.csv");
+            }
+            //$this->save_xlsx($array, $header);
+            //$this->save_csv($array, $header);
+        } else {
+            $data = SimpleXLSX::parseError();
+        } 
+        return $data;
+    }
+
+    
+
     private function save_json($data){
-        //$date = time();
-        $date = '';
+        $date = time();
+        //$date = '';
         $jsonString = json_encode($data,JSON_UNESCAPED_UNICODE);
-        $file = fopen('files/export_products_'. $date.'.json', 'w');
+        $file = fopen('files/export_products_'. $this->date .'.json', 'w');
         fwrite($file, $jsonString);
         fclose($file);
     }
 
-    private function save_xlsx($data, $header){
-        //$date = time();
-        $date = '';
+    private function save_xlsx($data, $header, $path  ){
+        $date = time();
+        //$date = '';
         array_unshift($data, $header);
        
         $xlsx = Shuchkin\SimpleXLSXGen::fromArray( $data );
-        $xlsx->saveAs('files/export_products_'. $date.'.xlsx');
+        $xlsx->saveAs($path);
     }
-    private function save_csv($data, $header){
-       //$date = time();
-       $date = '';
+    private function save_csv($data, $header, $path){
+       $date = time();
+       //$date = '';
         array_unshift($data, $header);
        
         $csv = SimpleCSV::export( $data ); 
-        $file = fopen('files/export_products_'. $date.'.csv', 'w');
+        $file = fopen($path, 'w');
         fwrite($file, $csv);
         fclose($file);
     }
@@ -175,7 +212,7 @@ class Scrapper
         }
 
         $html = "</br><h2>Характеристики</h2>$tr";
-echo $html;
+
         return $html;
     }
     private function get_attribute_formate_xlsx($attributes,$num_attribute){
