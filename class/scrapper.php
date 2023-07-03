@@ -2,6 +2,7 @@
 
 use SimpleCSV;
 use GuzzleHttp\Client;
+use GuzzleHttp\Promise;
 use Shuchkin\SimpleXLSX;
 use GuzzleHttp\Exception\ClientException;
 use Symfony\Component\DomCrawler\Crawler;
@@ -63,8 +64,8 @@ class Scrapper
             
           //  $data_export_xlsx[] = array_merge($product, $this->get_formate_xslx($content_data) );
           if( $status_code == 200){
-          $this->save_csv($data_export_xlsx, $header_export_xlsx); 
-          $this->save_xlsx($data_export_xlsx, $header_export_xlsx); 
+        //  $this->save_csv($data_export_xlsx, $header_export_xlsx); 
+         // $this->save_xlsx($data_export_xlsx, $header_export_xlsx); 
           $this->save_json($data);
           if($key+1 >= $this->num_products ){
                 break;
@@ -72,6 +73,14 @@ class Scrapper
         }
             }  
     
+    }
+
+    public function upload_pictures($pictures){
+        $photoUploader = new PhotoUploader();
+     
+        $destinationPath = 'images'; // Вкажіть шлях до директорії, де ви хочете зберегти зображення
+
+        return $photoUploader->uploadPhotos($pictures, $destinationPath);
     }
 
     public function upload_price_xlsx($file){ 
@@ -83,21 +92,32 @@ class Scrapper
             foreach ($data as $key => $item) {
                 if($item[27] != ''){
                     $item[24] = str_replace(',',';', $item[24] );
+                    $item[24] = str_replace('>',' > ', $item[24] );
                    // $item[27] = '';
+                   
+                    $pictures = explode(', ',$item[27]); 
+                    $text = "$key. ". date('Y-m-d H:i:s')." $item[0]";
+                    echo $text . "<br>";
+                    $this->logs($text);
+                    $images = $this->upload_pictures($pictures);
+                    $item[27] = implode(', ',$images);
                     $array[] = $item;
+                  if($key == 99){
+                    break;
+                  }
                    // dd($item,2);
                 }
-            }
+            } 
 
-            $products = array_chunk($array,100);
+            //$products = array_chunk($array,100);
 
            // dd($products);
-            foreach ($products as $key => $product) {
+           /* foreach ($products as $key => $product) {
                 $this->save_xlsx($product, $header, "files/export/xlsx/products_$key.xlsx");
                 $this->save_csv($product, $header, "files/export/csv/products_$key.csv");
-            }
-            //$this->save_xlsx($array, $header);
-            //$this->save_csv($array, $header);
+            }*/
+            $this->save_xlsx($array, $header , "files/export/products_full.xlsx");
+            $this->save_csv($array, $header,"files/export/products_full.csv");
         } else {
             $data = SimpleXLSX::parseError();
         } 
